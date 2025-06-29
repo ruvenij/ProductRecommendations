@@ -2,9 +2,11 @@ package store
 
 import (
 	"ProductRecommendations/internal/model"
+	"sync"
 )
 
 type Store struct {
+	mu                  sync.RWMutex
 	products            map[string]*model.Product
 	users               map[string]*model.User
 	productsForCategory map[string][]string // key - category, value - product ids belong to the category
@@ -18,19 +20,25 @@ func NewStore() *Store {
 	}
 }
 
-func (s *Store) AddProduct(prod *model.Product) error {
+func (s *Store) AddProduct(prod *model.Product) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	s.products[prod.Id] = prod
 	s.productsForCategory[prod.Category] = append(s.productsForCategory[prod.Category], prod.Id)
-
-	return nil
 }
 
-func (s *Store) AddUser(user *model.User) error {
+func (s *Store) AddUser(user *model.User) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	s.users[user.Id] = user
-	return nil
 }
 
 func (s *Store) IsValidProduct(id string) bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
 	if product, exists := s.products[id]; !exists || product == nil || product.Id == "" {
 		return false
 	}
@@ -39,6 +47,9 @@ func (s *Store) IsValidProduct(id string) bool {
 }
 
 func (s *Store) IsValidUser(id string) bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
 	if user, exists := s.users[id]; !exists || user == nil || user.Id == "" {
 		return false
 	}
@@ -47,10 +58,16 @@ func (s *Store) IsValidUser(id string) bool {
 }
 
 func (s *Store) GetProduct(id string) *model.Product {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
 	return s.products[id]
 }
 
 func (s *Store) GetProductCategories() []string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
 	categories := make([]string, 0)
 	for category, _ := range s.productsForCategory {
 		categories = append(categories, category)
@@ -60,5 +77,8 @@ func (s *Store) GetProductCategories() []string {
 }
 
 func (s *Store) GetProductsForCategory(category string) []string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
 	return s.productsForCategory[category]
 }

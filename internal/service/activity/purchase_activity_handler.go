@@ -3,9 +3,11 @@ package activity
 import (
 	"ProductRecommendations/internal/model"
 	"errors"
+	"sync"
 )
 
 type PurchaseActivityHandler struct {
+	mu                                  sync.RWMutex
 	transactionsByUserId                map[string]map[string][]*model.Purchase // key1 - userid, key2 - product id, value - slice of purchases
 	transactionCountByUserIdAndCategory map[string]map[string]int               // key1 - userid, key2 - category, value - txn count
 
@@ -21,6 +23,9 @@ func NewPurchaseActivityHandler() *PurchaseActivityHandler {
 }
 
 func (p *PurchaseActivityHandler) ProcessActivity(activity model.Activity) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
 	pAct, ok := activity.(*model.PurchaseActivity)
 	if !ok {
 		return errors.New("Incompatible activity type received by purchase activity handler ")
@@ -52,6 +57,9 @@ func (p *PurchaseActivityHandler) ProcessActivity(activity model.Activity) error
 }
 
 func (p *PurchaseActivityHandler) GetActivityCountForUserAndCategory(userId string, category string) int {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+
 	if _, exists := p.transactionCountByUserIdAndCategory[userId]; !exists {
 		return 0
 	}
@@ -60,10 +68,16 @@ func (p *PurchaseActivityHandler) GetActivityCountForUserAndCategory(userId stri
 }
 
 func (p *PurchaseActivityHandler) GetActivityCountForProduct(productId string) int {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+
 	return p.txnCountByProductId[productId]
 }
 
 func (p *PurchaseActivityHandler) IsUserAlreadyPurchasedProduct(userId string, productId string) bool {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+
 	if _, ok := p.transactionsByUserId[userId]; !ok {
 		return false
 	}

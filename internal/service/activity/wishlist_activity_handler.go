@@ -3,9 +3,11 @@ package activity
 import (
 	"ProductRecommendations/internal/model"
 	"errors"
+	"sync"
 )
 
 type WishlistActivityHandler struct {
+	mu                                  sync.RWMutex
 	transactionsByUserId                map[string]map[string]int // key1 - userid, key2 - product id, value - wishlist count
 	transactionCountByUserIdAndCategory map[string]map[string]int // key1 - userid, key2 - category, value - wishlist count
 
@@ -21,6 +23,9 @@ func NewWishlistActivityHandler() *ViewActivityHandler {
 }
 
 func (w *WishlistActivityHandler) ProcessActivity(activity model.Activity) error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
 	wAct, ok := activity.(*model.WishlistActivity)
 	if !ok {
 		return errors.New("Incompatible activity type received by wishlist activity handler ")
@@ -42,6 +47,9 @@ func (w *WishlistActivityHandler) ProcessActivity(activity model.Activity) error
 }
 
 func (w *WishlistActivityHandler) GetActivityCountForUserAndCategory(userId string, category string) int {
+	w.mu.RLock()
+	defer w.mu.RUnlock()
+
 	if _, exists := w.transactionCountByUserIdAndCategory[userId]; !exists {
 		return 0
 	}
@@ -50,5 +58,8 @@ func (w *WishlistActivityHandler) GetActivityCountForUserAndCategory(userId stri
 }
 
 func (w *WishlistActivityHandler) GetActivityCountForProduct(productId string) int {
+	w.mu.RLock()
+	defer w.mu.RUnlock()
+
 	return w.txnCountByProductId[productId]
 }

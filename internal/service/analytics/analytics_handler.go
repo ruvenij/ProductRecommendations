@@ -7,6 +7,7 @@ import (
 	"ProductRecommendations/internal/util"
 	"log"
 	"sort"
+	"sync"
 	"time"
 )
 
@@ -16,6 +17,7 @@ type Recommendation struct {
 }
 
 type Analytics struct {
+	mu                  sync.RWMutex
 	UserRecommendations map[string]*Recommendation
 	UserCacheTtl        time.Duration
 	Store               *store.Store
@@ -32,6 +34,23 @@ func NewAnalyticsHandler(store *store.Store, activityManager *activity.UserActiv
 }
 
 func (a *Analytics) GetRecommendationsForUser(userId string, productLimit int) ([]*model.Product, error) {
+	recommendationsFromCache, err := a.readRecommendationsFromCache(userId, productLimit)
+	if err != nil {
+		return nil, err
+	}
+
+	if recommendationsFromCache != nil && len(recommendationsFromCache) > 0 {
+		return recommendationsFromCache, nil
+	}
+
+	// else compute again and update the cache
+	return a.computeRecommendations(userId, productLimit)
+}
+
+func (a *Analytics) readRecommendationsFromCache(userId string, productLimit int) ([]*model.Product, error) {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+
 	// check whether ttl has expired
 	if rec, ok := a.UserRecommendations[userId]; ok {
 		if time.Since(rec.ComputedTime).Seconds() < a.UserCacheTtl.Seconds() {
@@ -39,11 +58,13 @@ func (a *Analytics) GetRecommendationsForUser(userId string, productLimit int) (
 		}
 	}
 
-	// else compute again and update the cache
-	return a.computeRecommendations(userId, productLimit)
+	return []*model.Product{}, nil
 }
 
 func (a *Analytics) computeRecommendations(userId string, productLimit int) ([]*model.Product, error) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
 	// find the most liked and most purchased categories for user id
 	popularityIndexForCategories := a.getMostPopularCategoriesBasedOnUserInteraction(userId, util.CategoryLimitForPopularity)
 	log.Println("Popularity Index ", popularityIndexForCategories)

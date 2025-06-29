@@ -27,12 +27,24 @@ func NewApp(ttlDuration time.Duration) *App {
 
 func (app *App) RegisterProducts(products []*model.Product) {
 	for _, product := range products {
-		_ = app.Store.AddProduct(product)
+		app.Store.AddProduct(product)
 	}
 }
 
 func (app *App) RegisterUsers(users []*model.User) {
 	for _, user := range users {
-		_ = app.Store.AddUser(user)
+		app.Store.AddUser(user)
 	}
+}
+
+func (app *App) IsValidUser(userId string) bool {
+	return app.Store.IsValidUser(userId)
+}
+
+func (app *App) IsValidProduct(productId string) bool {
+	return app.Store.IsValidProduct(productId)
+}
+
+func (app *App) GetRecommendationsForUser(userId string, productLimit int) ([]*model.Product, error) {
+	return app.Analytics.GetRecommendationsForUser(userId, productLimit)
 }

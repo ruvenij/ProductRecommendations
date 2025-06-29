@@ -21,3 +21,7 @@ const (
 	ViewActivityType     = "view"
 	WishlistActivityType = "wishlist"
 )
+
+const (
+	RecommendationLimit = 10 // make this a config later
+)

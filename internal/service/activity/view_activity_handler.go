@@ -3,9 +3,11 @@ package activity
 import (
 	"ProductRecommendations/internal/model"
 	"errors"
+	"sync"
 )
 
 type ViewActivityHandler struct {
+	mu                                  sync.RWMutex
 	transactionsByUserId                map[string]map[string]int // key1 - userid, key2 - product id, value - view count
 	transactionCountByUserIdAndCategory map[string]map[string]int // key1 - userid, key2 - category, value - view count
 
@@ -21,6 +23,9 @@ func NewViewActivityHandler() *ViewActivityHandler {
 }
 
 func (v *ViewActivityHandler) ProcessActivity(activity model.Activity) error {
+	v.mu.Lock()
+	defer v.mu.Unlock()
+
 	vAct, ok := activity.(*model.ViewActivity)
 	if !ok {
 		return errors.New("Incompatible activity type received by view activity handler ")
@@ -42,6 +47,9 @@ func (v *ViewActivityHandler) ProcessActivity(activity model.Activity) error {
 }
 
 func (v *ViewActivityHandler) GetActivityCountForUserAndCategory(userId string, category string) int {
+	v.mu.RLock()
+	defer v.mu.RUnlock()
+
 	if _, exists := v.transactionCountByUserIdAndCategory[userId]; !exists {
 		return 0
 	}
@@ -50,5 +58,8 @@ func (v *ViewActivityHandler) GetActivityCountForUserAndCategory(userId string, 
 }
 
 func (v *ViewActivityHandler) GetActivityCountForProduct(productId string) int {
+	v.mu.RLock()
+	defer v.mu.RUnlock()
+
 	return v.txnCountByProductId[productId]
 }
