@@ -1,5 +1,9 @@
 #!/bin/bash
 
+echo -e "\n\nFetching all products..."
+curl http://localhost:8080/api/recommendations?user_id=U1004
+echo
+
 echo "Creating sample product..."
 curl -X POST http://localhost:8080/api/activity \
   -H "Content-Type: application/json" \
@@ -29,7 +33,7 @@ echo -e "\n\nFetching all products..."
 curl http://localhost:8080/api/recommendations?user_id=U1004
 echo
 
-sleep 2 
+sleep 2
 
 echo "Creating sample product..."
 curl -X POST http://localhost:8080/api/activity \

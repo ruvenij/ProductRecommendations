@@ -5,14 +5,14 @@ import (
 	"ProductRecommendations/internal/service/activity"
 	"ProductRecommendations/internal/store"
 	"ProductRecommendations/internal/util"
-	"log"
+	"github.com/labstack/gommon/log"
 	"sort"
 	"sync"
 	"time"
 )
 
 type Recommendation struct {
-	ComputedTime    time.Time
+	ExpiryAt        time.Time
 	Recommendations []*model.Product
 }
 
@@ -53,7 +53,8 @@ func (a *Analytics) readRecommendationsFromCache(userId string, productLimit int
 
 	// check whether ttl has expired
 	if rec, ok := a.UserRecommendations[userId]; ok {
-		if time.Since(rec.ComputedTime).Seconds() < a.UserCacheTtl.Seconds() {
+		if time.Now().Before(rec.ExpiryAt) {
+			log.Debug("Current time is within the ttl active time. No need to compute recommendations")
 			return rec.Recommendations, nil
 		}
 	}
@@ -67,7 +68,7 @@ func (a *Analytics) computeRecommendations(userId string, productLimit int) ([]*
 
 	// find the most liked and most purchased categories for user id
 	popularityIndexForCategories := a.getMostPopularCategoriesBasedOnUserInteraction(userId, util.CategoryLimitForPopularity)
-	log.Println("Popularity Index ", popularityIndexForCategories)
+	log.Debug("Popularity Index ", popularityIndexForCategories)
 
 	// find the products for chosen categories
 	popularityIndexForProducts := a.findProductsForCategories(userId, productLimit, popularityIndexForCategories)
@@ -80,7 +81,7 @@ func (a *Analytics) computeRecommendations(userId string, productLimit int) ([]*
 
 	// add the recommendations to the cache, for future requests
 	r := &Recommendation{
-		ComputedTime:    time.Now(),
+		ExpiryAt:        time.Now().Add(a.UserCacheTtl), // computed time changes to current time
 		Recommendations: result,
 	}
 	a.UserRecommendations[userId] = r
@@ -88,9 +89,9 @@ func (a *Analytics) computeRecommendations(userId string, productLimit int) ([]*
 	return result, nil
 }
 
-func (a *Analytics) getMostPopularCategoriesBasedOnUserInteraction(userId string, categoryCount int) []*model.Popularity {
-	categoryIndex := make(map[string]*model.Popularity)
-	popularityIndex := make([]*model.Popularity, 0)
+func (a *Analytics) getMostPopularCategoriesBasedOnUserInteraction(userId string, categoryCount int) []*model.CategoryScore {
+	categoryIndex := make(map[string]*model.CategoryScore)
+	popularityIndex := make([]*model.CategoryScore, 0)
 	productCategories := a.Store.GetProductCategories()
 
 	for _, category := range productCategories {
@@ -101,22 +102,25 @@ func (a *Analytics) getMostPopularCategoriesBasedOnUserInteraction(userId string
 			ViewCount:     a.UserActivityManager.GetActivityCountForUserAndCategory(util.ViewActivity, userId, category),
 		})
 
-		if popularityScore > 0 {
-			if _, ok := categoryIndex[category]; !ok {
-				p := &model.Popularity{
-					Category: category,
-				}
-				categoryIndex[category] = p
-				popularityIndex = append(popularityIndex, p)
+		if _, ok := categoryIndex[category]; !ok {
+			p := &model.CategoryScore{
+				Category: category,
 			}
-
-			categoryIndex[category].Popularity = popularityScore
+			categoryIndex[category] = p
+			popularityIndex = append(popularityIndex, p)
 		}
+
+		categoryIndex[category].Popularity = popularityScore
 	}
 
 	// sort the categories based on the popularity
 	sort.Slice(popularityIndex, func(i, j int) bool {
-		return popularityIndex[i].Popularity > popularityIndex[j].Popularity
+		if popularityIndex[i].Popularity > 0 || popularityIndex[j].Popularity > 0 {
+			return popularityIndex[i].Popularity > popularityIndex[j].Popularity
+		}
+
+		// else sort by category
+		return popularityIndex[i].Category < popularityIndex[j].Category
 	})
 
 	// get the most popular categories out of existing
@@ -134,15 +138,15 @@ func getPopularityScore(params *model.PopularityParams) int {
 		params.ViewCount*util.ViewCountScore
 }
 
-func (a *Analytics) findProductsForCategories(userId string, productCount int, popularCategories []*model.Popularity) []*model.Popularity {
-	popularityIndexForProducts := make([]*model.Popularity, 0)
+func (a *Analytics) findProductsForCategories(userId string, productCount int, popularCategories []*model.CategoryScore) []*model.ProductScore {
+	popularityIndexForProducts := make([]*model.ProductScore, 0)
 	for _, category := range popularCategories {
 		productsForCategory := a.Store.GetProductsForCategory(category.Category)
 		for _, prodId := range productsForCategory {
 
 			// is this already purchased by user before, if so, ignore the product
 			if a.UserActivityManager.IsUserAlreadyPurchasedProduct(userId, prodId) {
-				log.Println("Ignored the product for category as user has purchased the product before ", category.Category, prodId)
+				log.Info("Ignored the product for category as user has purchased the product before ", category.Category, prodId)
 				continue
 			}
 
@@ -153,7 +157,7 @@ func (a *Analytics) findProductsForCategories(userId string, productCount int, p
 				ViewCount:     a.UserActivityManager.GetActivityCountForProduct(util.ViewActivity, prodId),
 			})
 
-			popForProduct := &model.Popularity{
+			popForProduct := &model.ProductScore{
 				Id:         prodId,
 				Category:   category.Category,
 				Popularity: popularityScore,
@@ -169,7 +173,7 @@ func (a *Analytics) findProductsForCategories(userId string, productCount int, p
 		}
 
 		// sort based on the name since both values are zero
-		return popularityIndexForProducts[i].Id > popularityIndexForProducts[j].Id
+		return popularityIndexForProducts[i].Id < popularityIndexForProducts[j].Id
 
 	})
 

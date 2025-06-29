@@ -2,6 +2,7 @@ package store
 
 import (
 	"ProductRecommendations/internal/model"
+	"github.com/labstack/gommon/log"
 	"sync"
 )
 
@@ -26,6 +27,7 @@ func (s *Store) AddProduct(prod *model.Product) {
 
 	s.products[prod.Id] = prod
 	s.productsForCategory[prod.Category] = append(s.productsForCategory[prod.Category], prod.Id)
+	log.Debugf("Added product %s to store", prod.Id)
 }
 
 func (s *Store) AddUser(user *model.User) {
@@ -33,6 +35,7 @@ func (s *Store) AddUser(user *model.User) {
 	defer s.mu.Unlock()
 
 	s.users[user.Id] = user
+	log.Debugf("Added user %s to store", user.Id)
 }
 
 func (s *Store) IsValidProduct(id string) bool {

@@ -148,12 +148,12 @@ func (a *Api) validateActivityParams(req *Activity) error {
 			return err
 		}
 
-		if lo.FromPtr(req.Quantity) == 0 {
-			return errors.New("Received zero quantity for purchase activity type ")
+		if lo.FromPtr(req.Quantity) < 0 {
+			return errors.New("Received invalid quantity for purchase activity type ")
 		}
 
-		if price == decimal.Zero {
-			return errors.New("Received zero price for purchase activity type ")
+		if price.LessThanOrEqual(decimal.Zero) {
+			return errors.New("Received invalid price for purchase activity type ")
 		}
 	}
 
