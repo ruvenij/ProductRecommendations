@@ -2,21 +2,26 @@ package app
 
 import (
 	"ProductRecommendations/internal/model"
+	"ProductRecommendations/internal/service/activity"
+	"ProductRecommendations/internal/service/analytics"
 	"ProductRecommendations/internal/store"
 	"time"
 )
 
 type App struct {
-	Store     *store.Store
-	Analytics *store.Analytics
+	Store               *store.Store
+	Analytics           *analytics.Analytics
+	UserActivityManager *activity.UserActivityManager
 }
 
 func NewApp(ttlDuration time.Duration) *App {
 	prodStore := store.NewStore()
-	analyticsStore := store.NewAnalytics(prodStore, ttlDuration)
+	activityManager := activity.NewUserActivityManager()
+	analyticsStore := analytics.NewAnalyticsHandler(prodStore, activityManager, ttlDuration)
 	return &App{
-		Store:     prodStore,
-		Analytics: analyticsStore,
+		Store:               prodStore,
+		Analytics:           analyticsStore,
+		UserActivityManager: activityManager,
 	}
 }
 

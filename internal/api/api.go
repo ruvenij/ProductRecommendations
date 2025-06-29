@@ -28,7 +28,7 @@ func (a *Api) RegisterApiFunctions() {
 
 func (a *Api) GetRecommendationsForUser(c echo.Context) error {
 	userId := c.QueryParam("user_id")
-	result, err := a.app.Analytics.GetRecommendationsForUser(userId)
+	result, err := a.app.Analytics.GetRecommendationsForUser(userId, 10)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
@@ -47,25 +47,21 @@ func (a *Api) AddActivityForUser(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Missing required fields"})
 	}
 
-	v := &model.Activity{
-		ProductId: req.ProductId,
-		UserId:    req.UserId,
+	ba := &model.BaseActivity{
+		ProductId:    req.ProductId,
+		UserId:       req.UserId,
+		ActivityType: req.Type,
 	}
 
-	var err error
-	switch req.Type {
-	case "view":
-		err = a.app.Store.AddView(v)
-	case "purchase":
-		v.Price = *req.Price
-		v.Quantity = *req.Quantity
-		err = a.app.Store.AddPurchase(v)
-	case "wishlist":
-		err = a.app.Store.AddWishlist(v)
-	default:
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid type"})
+	if req.Price != nil {
+		ba.Price = *req.Price
 	}
 
+	if req.Quantity != nil {
+		ba.Quantity = *req.Quantity
+	}
+
+	err := a.app.ProcessActivity(ba)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
 	}
